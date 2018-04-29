@@ -1,6 +1,7 @@
 #include <Python.h>
 #include <structmember.h>
 #include "dictimpl.h"
+#include <stdio.h>
 
 extern PyMethodDef ModuleMethods[];
 
@@ -16,6 +17,59 @@ typedef struct {
     struct dictimpl *impl;
 } py3dictObject;
 
+#define DICTIMPL(obj) (((py3dictObject *)(obj))->impl)
+
+static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
+    PyObject *obj;
+    struct dictimpl *dictimpl;
+
+    dictimpl = dictimpl_new();
+    printf("__new__: dictimpl=%p\n", dictimpl);
+    
+    if (dictimpl == NULL) {
+        return PyErr_NoMemory();
+    }
+
+    obj = PyType_GenericNew(subtype, args, kwds);
+    if (obj == NULL) {
+        PyMem_Del(dictimpl);
+        return NULL;
+    }
+
+    DICTIMPL(obj) = dictimpl;
+    return obj; 
+}
+
+static void py3dict_dealloc(py3dictObject* self) {
+    struct dictimpl *d = DICTIMPL(self);
+    printf("__dealloc__: dictimpl=%p\n", d);
+    PyMem_Free(d);
+    Py_TYPE(self)->tp_free(self);
+}
+
+static int py3dict_init(py3dictObject *self, PyObject *args, PyObject *kwds) {
+    printf("__init__: dictimpl=%p\n", DICTIMPL(self));
+    return dictimpl_init(DICTIMPL(self), args, kwds);
+}
+
+static Py_ssize_t py3dict_len(py3dictObject *self) {
+    Py_ssize_t len = dictimpl_len(DICTIMPL(self));
+    printf("__len__: %d, dictimpl=%p\n", len, DICTIMPL(self));
+    return len;
+}
+
+static PyObject *py3dict_subscript(py3dictObject *self, PyObject *key) {
+    printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
+    return dictimpl_subscript(DICTIMPL(self), key);
+}
+
+static int py3dict_ass_subscript(py3dictObject *self, PyObject *key, PyObject *val) {
+    printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
+    // PyObject_Print(key, stdout, 0);
+    // PyObject_Print(val, stdout, 0);
+    return dictimpl_ass_subscript(DICTIMPL(self), key, val);
+}
+
 static PyMethodDef py3dict_methods[] = {
     // {"say_hello", say_hello, METH_VARARGS, "Greet somebody."},
 
@@ -28,7 +82,7 @@ static PyMemberDef py3dict_members[] = {
 };
 
 static PyMappingMethods py3dict_mapping_methods = {
-    (lenfunc) py3dict_length, 
+    (lenfunc) py3dict_len, 
     (binaryfunc) py3dict_subscript,
     (objobjargproc) py3dict_ass_subscript,
 };
@@ -38,7 +92,7 @@ static PyTypeObject py3dict_type = {
     "py3dict",             /* tp_name */
     sizeof(py3dictObject),             /* tp_basicsize */
     0,                         /* tp_itemsize */
-    0,                         /* tp_dealloc */
+    (destructor)py3dict_dealloc,                         /* tp_dealloc */
     0,                         /* tp_print */
     0,                         /* tp_getattr */
     0,                         /* tp_setattr */
@@ -73,6 +127,14 @@ static PyTypeObject py3dict_type = {
     (initproc) py3dict_init,   /* tp_init */
     0,                         /* tp_alloc */
     (newfunc) py3dict_new,     /* tp_new */
+    0,                          /* tp_free */ /* Low-level free-memory routine */
+    0,                          /* tp_is_gc */
+    0,                          /* tp_bases */
+    0,                          /* tp_mro */
+    0,                          /* tp_cache */
+    0,                          /* tp_subclasses */
+    0,                          /* tp_weaklist */
+    0,                          /* tp_del */
 };
 
 PyMODINIT_FUNC

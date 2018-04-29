@@ -7,48 +7,134 @@
 //     t->tp_new()
 // }
 
-struct dictimpl {
-    int a;
+struct listnode {
+    PyObject *key;
+    PyObject *val;
+    struct listnode *next;
 };
 
-PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
-    PyObject *obj;
-    struct dictimpl *dictimpl;
-    // printf("__new__\n");
+static struct listnode *
+newlistnode(PyObject *key, PyObject *val) {
+    struct listnode *node = PyMem_New(struct listnode, 1);
+    if (node != NULL) {
+        Py_INCREF(key);
+        Py_INCREF(val);
+        node->key = key;
+        node->val = val;
+        node->next = NULL;
+    }
+    return node;
+}
 
-    dictimpl = PyMem_New(struct dictimpl, 1);
-    if (dictimpl == NULL) {
+static void 
+freelistnode(struct listnode *node) {
+    Py_DECREF(node->key);
+    Py_DECREF(node->val);
+    node->next = NULL;
+    PyMem_FREE(node);
+}
+
+struct dictimpl {
+    Py_ssize_t len;
+    int arraylen;
+    struct listnode *array[8];
+};
+
+struct dictimpl *dictimpl_new() {
+    struct dictimpl *d = PyMem_New(struct dictimpl, 1);
+    int i;
+    if (d == NULL) {
+        return NULL;
+    }
+    d->len = 0;
+    d->arraylen = ARRAY_LEN(d->array);
+    for (i = 0; i < d->arraylen; i++) {
+        printf("init array[%d] from %p to %p\n", i, d->array[i], NULL);
+        d->array[i] = NULL;
+    }
+    
+    return d ;
+}
+
+int dictimpl_init(struct dictimpl* d, PyObject *args, PyObject *kwds) {
+    return 0;
+}
+
+Py_ssize_t dictimpl_len(struct dictimpl *d) {
+    return d->len;
+}
+
+int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
+    int hash = PyObject_Hash(key) % d->arraylen;
+    int cmp;
+
+    struct listnode *pnode = NULL;
+    struct listnode *node = d->array[hash];
+    
+    assert(key);
+    
+    while (node != NULL) {
+        cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
+        if (cmp < 0) {
+            return -1;
+        } else if (cmp > 0) {
+            // key exists
+            if (val != NULL) {
+                // update node with new value
+                Py_DecRef(node->val);
+                Py_INCREF(val);
+                node->val = val;
+            } else {
+                // remove node
+                if (pnode == NULL) {
+                    d->array[hash] = node->next; 
+                } else {
+                    pnode->next = node->next; 
+                }
+                freelistnode(node);
+                d->len -= 1;
+            }
+            return 0;
+        } else {
+            pnode = node;
+            node = node->next;
+        }
+    }
+
+    // key not exists
+    if (val == NULL) {
+        PyErr_SetObject(PyExc_KeyError, key);
+        return -1;
+    }
+
+    node = newlistnode(key, val);
+    if (node == NULL) {
         PyErr_NoMemory();
-        return NULL;
+        return -1;
     }
 
-    obj = PyType_GenericNew(subtype, args, kwds);
-    if (obj == NULL) {
-        PyMem_Del(dictimpl);
-        return NULL;
+    node->next = d->array[hash];
+    d->array[hash] = node;
+    d->len += 1;
+    return 0;
+}
+
+PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
+    int hash = PyObject_Hash(key) % d->arraylen;
+    struct listnode *node = d->array[hash];
+    int cmp;
+
+    while (node != NULL) {
+        cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
+        if (cmp < 0) {
+            return NULL;
+        } else if (cmp > 0) {
+            return node->val;
+        } else {
+            node = node->next;
+        }
     }
 
-    DICTIMPL(obj) = dictimpl;
-    return obj; 
+    PyErr_SetObject(PyExc_KeyError, key);
+    return NULL;
 }
-
-int py3dict_init(PyObject *self, PyObject *args, PyObject *kwds) {
-    printf("__init__\n");
-    return 0;
-}
-
-Py_ssize_t py3dict_length(PyObject *self) {
-    printf("__len__\n");
-    return 0;
-}
-
-PyObject *py3dict_subscript(PyObject *self, PyObject *key) {
-    printf("__getitem__\n");
-    Py_RETURN_NONE;
-}
-
-int py3dict_ass_subscript(PyObject *self, PyObject *key, PyObject *val) {
-    printf("__setitem__\n");
-    return 0;
-}
-
