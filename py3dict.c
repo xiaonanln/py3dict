@@ -23,7 +23,7 @@ static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kw
     struct dictimpl *dictimpl;
 
     dictimpl = dictimpl_new();
-    printf("__new__: dictimpl=%p\n", dictimpl);
+    // printf("__new__: dictimpl=%p\n", dictimpl);
     
     if (dictimpl == NULL) {
         return PyErr_NoMemory();
@@ -41,21 +41,21 @@ static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kw
 
 static void py3dict_dealloc(Py3DictObject* self) {
     struct dictimpl *d = DICTIMPL(self);
-    printf("__dealloc__: dictimpl=%p\n", d);
+    // printf("__dealloc__: dictimpl=%p\n", d);
     PyMem_Free(d);
     Py_TYPE(self)->tp_free(self);
 }
 
 static int 
 py3dict_init(Py3DictObject *self, PyObject *args, PyObject *kwds) {
-    printf("__init__: dictimpl=%p\n", DICTIMPL(self));
+    // printf("__init__: dictimpl=%p\n", DICTIMPL(self));
     return dictimpl_init(DICTIMPL(self), args, kwds);
 }
 
 static Py_ssize_t 
 py3dict_len(Py3DictObject *self) {
     Py_ssize_t len = dictimpl_len(DICTIMPL(self));
-    printf("__len__: %ld, dictimpl=%p\n", len, DICTIMPL(self));
+    // printf("__len__: %ld, dictimpl=%p\n", len, DICTIMPL(self));
     return len;
 }
 
@@ -63,17 +63,17 @@ static PyObject *
 py3dict_sizeof(Py3DictObject *self)
 {
     Py_ssize_t size = _PyObject_SIZE(Py_TYPE(self)) + dictimpl_sizeof(DICTIMPL(self));
-    printf("__sizeof__: %ld", size);
+    // printf("__sizeof__: %ld", size);
     return PyLong_FromSsize_t(size);
 }
 
 static PyObject *
 py3dict_subscript(Py3DictObject *self, PyObject *key) {
-    printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
+    // printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
     PyObject *val = dictimpl_subscript(DICTIMPL(self), key);
-    if (val != NULL) {
-        printf("__getitem__ val refcount = %ld\n", Py_REFCNT(val));
-    }
+    // if (val != NULL) {
+    //     // printf("__getitem__ val refcount = %ld\n", Py_REFCNT(val));
+    // }
     return val; 
 }
 
@@ -90,9 +90,7 @@ py3dict_get(Py3DictObject *self, PyObject *args) {
 
 static int 
 py3dict_ass_subscript(Py3DictObject *self, PyObject *key, PyObject *val) {
-    printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
-    // PyObject_Print(key, stdout, 0);
-    // PyObject_Print(val, stdout, 0);
+    // printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
     return dictimpl_ass_subscript(DICTIMPL(self), key, val);
 }
 

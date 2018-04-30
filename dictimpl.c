@@ -34,6 +34,14 @@ freelistnode(struct listnode *node) {
     PyMem_FREE(node);
 }
 
+static void setlistnodeval(struct listnode *node, PyObject *val) {
+    assert(val);
+    assert(node->val);
+    Py_INCREF(val);
+    Py_DECREF(node->val);
+    node->val = val;
+}
+
 struct dictimpl {
     Py_ssize_t len;
     int arraylen;
@@ -49,7 +57,7 @@ struct dictimpl *dictimpl_new() {
     d->len = 0;
     d->arraylen = ARRAY_LEN(d->array);
     for (i = 0; i < d->arraylen; i++) {
-        printf("init array[%d] from %p to %p\n", i, d->array[i], NULL);
+        // printf("init array[%d] from %p to %p\n", i, d->array[i], NULL);
         d->array[i] = NULL;
     }
     
@@ -65,7 +73,7 @@ Py_ssize_t dictimpl_len(struct dictimpl *d) {
 }
 
 Py_ssize_t dictimpl_sizeof(struct dictimpl *d) {
-    Py_ssize_t size = d->arraylen * sizeof(d->array[0]) + d->len * sizeof(struct listnode);
+    Py_ssize_t size = sizeof(struct dictimpl) + d->arraylen * sizeof(d->array[0]) + d->len * sizeof(struct listnode);
     return size;
 }
 
@@ -73,7 +81,7 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
     int hash = PyObject_Hash(key) % d->arraylen;
     int cmp;
 
-    struct listnode *pnode = NULL;
+    struct listnode **pnode = &d->array[hash];
     struct listnode *node = d->array[hash];
     
     assert(key);
@@ -86,27 +94,21 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
             // key exists
             if (val != NULL) {
                 // update node with new value
-                Py_DecRef(node->val);
-                Py_INCREF(val);
-                node->val = val;
+                setlistnodeval(node, val);
             } else {
                 // remove node
-                if (pnode == NULL) {
-                    d->array[hash] = node->next; 
-                } else {
-                    pnode->next = node->next; 
-                }
+                *pnode = node->next; 
                 freelistnode(node);
                 d->len -= 1;
             }
             return 0;
         } else {
-            pnode = node;
+            pnode = &node->next;
             node = node->next;
         }
     }
 
-    // key not exists
+    // key not exists, del raise KeyError
     if (val == NULL) {
         PyErr_SetObject(PyExc_KeyError, key);
         return -1;
@@ -146,7 +148,6 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
 }
 
 PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
-    
     int hash = PyObject_Hash(key) % d->arraylen;
     struct listnode *node = d->array[hash];
     int cmp;
@@ -168,4 +169,5 @@ PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
     Py_INCREF(failobj);
     return failobj;
 }
+
 

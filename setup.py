@@ -1,6 +1,10 @@
 from distutils.core import setup, Extension
 
-py3dictmodule = Extension('py3dict', sources = ['py3dict.c', 'dictimpl.c'])
+py3dictmodule = Extension(
+    'py3dict', 
+    sources = ['py3dict.c', 'dictimpl.c'], 
+    extra_compile_args = ["-Wno-comments"], 
+    )
 
 setup (name = 'py3dict',
        version = '0.1',
