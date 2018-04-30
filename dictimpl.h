@@ -6,21 +6,13 @@
 
 struct dictimpl;
 
-struct dictimpl *dictimpl_new();
+struct dictimpl *dictimpl_new(void);
 int dictimpl_init(struct dictimpl* d, PyObject *args, PyObject *kwds);
 
 Py_ssize_t dictimpl_len(struct dictimpl *d);
 int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val);
 PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key);
-
-// 
-
-// PyObject *py3dict_new(PyTypeObject *, PyObject *, PyObject *);
-// int py3dict_init(PyObject *, PyObject *, PyObject *);
-
-// Py_ssize_t py3dict_length(PyObject *self);
-// PyObject *py3dict_subscript(PyObject *self, PyObject *key);
-// int py3dict_ass_subscript(PyObject *self, PyObject *key, PyObject *val);
-// // PyObject *py3dict_alloc(struct _typeobject *, Py_ssize_t);
+PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj);
+Py_ssize_t dictimpl_sizeof(struct dictimpl *d);
 
 #endif//DICTIMPL_H

@@ -2,8 +2,7 @@
 #include <structmember.h>
 #include "dictimpl.h"
 #include <stdio.h>
-
-extern PyMethodDef ModuleMethods[];
+#include "docstr.h"
 
 struct listnode {
     PyObject *key;
@@ -15,9 +14,9 @@ typedef struct {
     PyObject_HEAD
     /* Type-specific fields go here. */
     struct dictimpl *impl;
-} py3dictObject;
+} Py3DictObject;
 
-#define DICTIMPL(obj) (((py3dictObject *)(obj))->impl)
+#define DICTIMPL(obj) (((Py3DictObject *)(obj))->impl)
 
 static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
     PyObject *obj;
@@ -40,30 +39,57 @@ static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kw
     return obj; 
 }
 
-static void py3dict_dealloc(py3dictObject* self) {
+static void py3dict_dealloc(Py3DictObject* self) {
     struct dictimpl *d = DICTIMPL(self);
     printf("__dealloc__: dictimpl=%p\n", d);
     PyMem_Free(d);
     Py_TYPE(self)->tp_free(self);
 }
 
-static int py3dict_init(py3dictObject *self, PyObject *args, PyObject *kwds) {
+static int 
+py3dict_init(Py3DictObject *self, PyObject *args, PyObject *kwds) {
     printf("__init__: dictimpl=%p\n", DICTIMPL(self));
     return dictimpl_init(DICTIMPL(self), args, kwds);
 }
 
-static Py_ssize_t py3dict_len(py3dictObject *self) {
+static Py_ssize_t 
+py3dict_len(Py3DictObject *self) {
     Py_ssize_t len = dictimpl_len(DICTIMPL(self));
-    printf("__len__: %d, dictimpl=%p\n", len, DICTIMPL(self));
+    printf("__len__: %ld, dictimpl=%p\n", len, DICTIMPL(self));
     return len;
 }
 
-static PyObject *py3dict_subscript(py3dictObject *self, PyObject *key) {
-    printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
-    return dictimpl_subscript(DICTIMPL(self), key);
+static PyObject *
+py3dict_sizeof(Py3DictObject *self)
+{
+    Py_ssize_t size = _PyObject_SIZE(Py_TYPE(self)) + dictimpl_sizeof(DICTIMPL(self));
+    printf("__sizeof__: %ld", size);
+    return PyLong_FromSsize_t(size);
 }
 
-static int py3dict_ass_subscript(py3dictObject *self, PyObject *key, PyObject *val) {
+static PyObject *
+py3dict_subscript(Py3DictObject *self, PyObject *key) {
+    printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
+    PyObject *val = dictimpl_subscript(DICTIMPL(self), key);
+    if (val != NULL) {
+        printf("__getitem__ val refcount = %ld\n", Py_REFCNT(val));
+    }
+    return val; 
+}
+
+static PyObject *
+py3dict_get(Py3DictObject *self, PyObject *args) {
+    PyObject *key;
+    PyObject *failobj = Py_None;
+
+    if (!PyArg_UnpackTuple(args, "get", 1, 2, &key, &failobj))
+        return NULL;
+    
+    return dictimpl_get(DICTIMPL(self), key, failobj);
+}
+
+static int 
+py3dict_ass_subscript(Py3DictObject *self, PyObject *key, PyObject *val) {
     printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
     // PyObject_Print(key, stdout, 0);
     // PyObject_Print(val, stdout, 0);
@@ -71,14 +97,21 @@ static int py3dict_ass_subscript(py3dictObject *self, PyObject *key, PyObject *v
 }
 
 static PyMethodDef py3dict_methods[] = {
-    // {"say_hello", say_hello, METH_VARARGS, "Greet somebody."},
-
+    {"get",         (PyCFunction) py3dict_get,      METH_VARARGS, get__doc__},
+    {"__sizeof__",  (PyCFunction) py3dict_sizeof,   METH_NOARGS, sizeof__doc__},
     {NULL}  /* Sentinel */
 };
 
 static PyMemberDef py3dict_members[] = {
-    // {"number", T_INT, offsetof(py3dictObject, number), 0, "test number"},
+    // {"number", T_INT, offsetof(Py3DictObject, number), 0, "test number"},
     {NULL}  /* Sentinel */
+};
+
+
+static PyMethodDef ModuleMethods[] = {
+    // {"system",  spam_system, METH_VARARGS, "Execute a shell command."},
+    // {"get", py3dict_get, METH_VARARGS, "get"}, 
+    {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
 static PyMappingMethods py3dict_mapping_methods = {
@@ -89,13 +122,14 @@ static PyMappingMethods py3dict_mapping_methods = {
 
 static PyTypeObject py3dict_type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "py3dict",             /* tp_name */
-    sizeof(py3dictObject),             /* tp_basicsize */
-    0,                         /* tp_itemsize */
-    (destructor)py3dict_dealloc,                         /* tp_dealloc */
-    0,                         /* tp_print */
-    0,                         /* tp_getattr */
-    0,                         /* tp_setattr */
+    "py3dict",                      /* tp_name */
+    sizeof(Py3DictObject
+),          /* tp_basicsize */
+    0,                              /* tp_itemsize */
+    (destructor)py3dict_dealloc,    /* tp_dealloc */
+    0,                              /* tp_print */
+    0,                              /* tp_getattr */
+    0,                              /* tp_setattr */
     0,                         /* tp_compare */
     0,                         /* tp_repr */
     0,                         /* tp_as_number */
@@ -107,8 +141,7 @@ static PyTypeObject py3dict_type = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT |
-        Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
     "py3dict objects",          /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */
@@ -153,8 +186,3 @@ initpy3dict(void)
     Py_INCREF(&py3dict_type);
     PyModule_AddObject(m, "py3dict", (PyObject *)&py3dict_type);
 }
-
-static PyMethodDef ModuleMethods[] = {
-    // {"system",  spam_system, METH_VARARGS, "Execute a shell command."},
-    {NULL, NULL, 0, NULL}        /* Sentinel */
-};

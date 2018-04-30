@@ -64,6 +64,11 @@ Py_ssize_t dictimpl_len(struct dictimpl *d) {
     return d->len;
 }
 
+Py_ssize_t dictimpl_sizeof(struct dictimpl *d) {
+    Py_ssize_t size = d->arraylen * sizeof(d->array[0]) + d->len * sizeof(struct listnode);
+    return size;
+}
+
 int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
     int hash = PyObject_Hash(key) % d->arraylen;
     int cmp;
@@ -129,6 +134,7 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
         if (cmp < 0) {
             return NULL;
         } else if (cmp > 0) {
+            Py_INCREF(node->val);
             return node->val;
         } else {
             node = node->next;
@@ -138,3 +144,28 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
     PyErr_SetObject(PyExc_KeyError, key);
     return NULL;
 }
+
+PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
+    
+    int hash = PyObject_Hash(key) % d->arraylen;
+    struct listnode *node = d->array[hash];
+    int cmp;
+
+    assert(key);
+    assert(failobj);
+    while (node != NULL) {
+        cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
+        if (cmp < 0) {
+            return NULL;
+        } else if (cmp > 0) {
+            Py_INCREF(node->val);
+            return node->val;
+        } else {
+            node = node->next;
+        }
+    }
+
+    Py_INCREF(failobj);
+    return failobj;
+}
+
