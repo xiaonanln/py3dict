@@ -7,6 +7,7 @@
 struct dictimpl;
 
 struct dictimpl *dictimpl_new(void);
+void dictimpl_free(struct dictimpl *d);
 int dictimpl_init(struct dictimpl* d, PyObject *args, PyObject *kwds);
 
 Py_ssize_t dictimpl_len(struct dictimpl *d);

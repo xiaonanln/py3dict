@@ -40,8 +40,9 @@ static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kw
 }
 
 static void py3dict_dealloc(Py3DictObject* self) {
-    printf("__dealloc__: dictimpl=%p\n", DICTIMPL(self));
-    PyMem_Free(DICTIMPL(self));
+    // printf("__dealloc__: dictimpl=%p\n", DICTIMPL(self));
+
+    dictimpl_free(DICTIMPL(self));
     DICTIMPL(self) = NULL;
     Py_TYPE(self)->tp_free(self);
 }
@@ -90,7 +91,7 @@ py3dict_get(Py3DictObject *self, PyObject *args) {
 
 static int 
 py3dict_ass_subscript(Py3DictObject *self, PyObject *key, PyObject *val) {
-    printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
+    // printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
     return dictimpl_ass_subscript(DICTIMPL(self), key, val);
 }
 
@@ -139,7 +140,8 @@ static PyTypeObject py3dict_type = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
+    // Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "py3dict objects",          /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */

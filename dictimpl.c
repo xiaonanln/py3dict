@@ -26,12 +26,22 @@ newlistnode(PyObject *key, PyObject *val) {
     return node;
 }
 
-static void 
+static void
 freelistnode(struct listnode *node) {
+    assert(node && node->key && node->val);
     Py_DECREF(node->key);
     Py_DECREF(node->val);
-    node->next = NULL;
     PyMem_FREE(node);
+}
+
+static void 
+freelist(struct listnode *head) {
+    struct listnode *next;
+    while (head != NULL) {
+        next = head->next;
+        freelistnode(head);
+        head = next; 
+    }
 }
 
 static void setlistnodeval(struct listnode *node, PyObject *val) {
@@ -62,6 +72,16 @@ struct dictimpl *dictimpl_new() {
     }
     
     return d ;
+}
+
+void dictimpl_free(struct dictimpl *d) {
+    assert(d);
+    int i;
+    for (i = 0; i < d->arraylen; i++) {
+        freelist(d->array[i]);
+        d->array[i] = NULL;
+    }
+    PyMem_FREE(d);
 }
 
 int dictimpl_init(struct dictimpl* d, PyObject *args, PyObject *kwds) {
@@ -95,9 +115,7 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
             // key exists
             if (val != NULL) {
                 // update node with new value
-		printf("before setlistnodeval\n");
                 setlistnodeval(node, val);
-		printf("after setlistnodeval\n");
             } else {
                 // remove node
                 *pnode = node->next; 
@@ -118,18 +136,18 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
     }
 	
     node = newlistnode(key, val);
-    printf("newlistnode %p, keyref=%d\n", node, Py_REFCNT(key));
+    // printf("newlistnode %p, keyref=%d\n", node, Py_REFCNT(key));
     if (node == NULL) {
-    	printf("nomemory\n");
+    	// printf("nomemory\n");
         PyErr_NoMemory();
         return -1;
     }
 
-    	printf("put to array: node=%p, hash=%d, d=%p, array=%p\n", node, hash, d, d->array[hash]);
+    	// printf("put to array: node=%p, hash=%d, d=%p, array=%p\n", node, hash, d, d->array[hash]);
     node->next = d->array[hash];
     d->array[hash] = node;
     d->len += 1;
-    printf("ass_subscript returns\n");
+    // printf("ass_subscript returns\n");
     return 0;
 }
 
