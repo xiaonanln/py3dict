@@ -1,5 +1,6 @@
 # coding: utf8
 import py3dict 
+import tbdict 
 import random 
 import time 
 import sys 
@@ -10,10 +11,9 @@ AVG_SIZE = sum(SIZE_RANGE) // 2
 US_PER_SECOND = 1000000
 
 def main():
-    random.seed(0)
-    benchmark('dict', dict)
-    random.seed(0)
-    benchmark('textbook dict', py3dict.py3dict)
+    for dictClass in (dict, tbdict.tbdict, py3dict.py3dict):
+        random.seed(0)
+        benchmark('dict', dictClass)
 
 def benchmark(name, dictClass):
     dicts = []

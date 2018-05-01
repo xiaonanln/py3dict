@@ -70,6 +70,11 @@ newhasharray(Py_ssize_t size) {
     return array;
 }
 
+static void 
+freehasharray(struct listnode **array) {
+    assert(array);
+    PyMem_FREE(array);
+}
 
 struct dictimpl {
     Py_ssize_t len;
@@ -151,6 +156,8 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
             node = next; 
         }
     }
+    
+    freehasharray(d->array);
 
     d->array = newarray; 
     d->arraylen = newarraylen;

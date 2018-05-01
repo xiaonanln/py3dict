@@ -1,95 +1,107 @@
 import sys
 from py3dict import py3dict
+from tbdict import tbdict 
 import unittest 
 import sys 
 
-class TestPy3Dict(unittest.TestCase):
+class BaseTestDict(object):
+    def __init__(self, dictClass, *args, **kwargs):
+        super(BaseTestDict, self).__init__(*args, **kwargs)
+        self.dictClass = dictClass
+
     def setUp(self):
-        # self.d = py3dict()
-        pass
+        self.d = self.dictClass()
         
     def testLen(self):
-        d = py3dict()
-        assert len(d) == 0
-        d[1] = 1
-        assert len(d) == 1
+        self.d = self.dictClass()
+        assert len(self.d) == 0
+        self.d[1] = 1
+        assert len(self.d) == 1
         for i in range(10):
-            d[i] = i*i
-        assert len(d) == 10
+            self.d[i] = i*i
+        assert len(self.d) == 10
 
     def testSetItem(self):
-        d = py3dict()
+        self.d = self.dictClass()
         for i in range(10):
-            d[i] = i*i
+            self.d[i] = i*i
         
-        assert len(d) == 10
+        assert len(self.d) == 10
         for i in range(10):
-            assert d[i] == i*i
+            assert self.d[i] == i*i
         
         return 
 
     def testKeyError(self):
-        d = py3dict()
+        self.d = self.dictClass()
         for i in range(10):
             try:
-                d[i]
-                assert False, d 
+                self.d[i]
+                assert False, self.d 
             except KeyError, e:
                 assert str(e) == str(i)
 
     def testGet(self):
-        d = py3dict()  
+        self.d = self.dictClass()  
         for i in range(10):
-            d[i] = i +1
+            self.d[i] = i +1
         for i in range(10):
-            assert d.get(i) == i+1
+            assert self.d.get(i) == i+1
         for i in range(10, 20):
-            assert d.get(i) is None
+            assert self.d.get(i) is None
 
     def test__setitem__(self):
-        d = py3dict()
+        self.d = self.dictClass()
         for i in range(10):
-            d.__setitem__(i, i)
-            assert d[i] == i
+            self.d.__setitem__(i, i)
+            assert self.d[i] == i
 
     def test__getitem__(self):
-        d = py3dict()
+        self.d = self.dictClass()
         for i in range(10):
-            d[i] = i
-            assert d.__getitem__(i) == i
+            self.d[i] = i
+            assert self.d.__getitem__(i) == i
 
         try:
-            d.__getitem__(1023123)
-            assert False, d 
+            self.d.__getitem__(1023123)
+            assert False, self.d 
         except KeyError:
             pass
 
     def testSizeOf(self):
-        d = py3dict()
-        s0 = sys.getsizeof(d)
-        assert s0  > 0, (d, s0)
+        self.d = self.dictClass()
+        s0 = sys.getsizeof(self.d)
+        assert s0  > 0, (self.d, s0)
         
         for i in range(10):
-            d[i] = i
-        assert sys.getsizeof(d) > s0, (s0, sys.getsizeof(d))
+            self.d[i] = i
+        assert sys.getsizeof(self.d) > s0, (s0, sys.getsizeof(self.d))
 
     def testGC(self):
-        d = py3dict()
-        d[1] = d 
+        self.d = self.dictClass()
+        self.d[1] = self.d 
 
         import gc 
         gc.collect()
 
     def testResize(self):
-        d = py3dict()
+        self.d = self.dictClass()
         for i in range(1000):
-            d[i] = i
+            self.d[i] = i
         for i in range(1000):
-            del d[i]
+            del self.d[i]
 
     def tearDown(self):
-        # self.d.clear()
+        # self.self.d.clear()
         pass
         
+class TestTBDict(BaseTestDict, unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestTBDict, self).__init__(tbdict, *args, **kwargs)
+
+class TestPy3Dict(BaseTestDict, unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestPy3Dict, self).__init__(py3dict, *args, **kwargs)
+
 if __name__ == '__main__':
     unittest.main()
