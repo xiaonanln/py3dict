@@ -1,12 +1,12 @@
 
 .PHONY: all build test clean
-all: build test bench
+all: clean build test bench
 
 build:
 	python setup.py build
 	cp build/lib.linux-x86_64-2.7/*.so ./
 
-test: build
+test: clean build
 	python test_basic.py
 
 clean:
@@ -15,6 +15,6 @@ clean:
 	-rm -rf build
 	
 
-bench: build
+bench: clean build
 	python bench.py
 

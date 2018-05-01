@@ -75,7 +75,7 @@ dict_sizeof(dictObject *self)
 
 static PyObject *
 dict_subscript(dictObject *self, PyObject *key) {
-    // printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
+    printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
     PyObject *val = dictimpl_subscript(DICTIMPL(self), key);
     // if (val != NULL) {
     //     // printf("__getitem__ val refcount = %ld\n", Py_REFCNT(val));
@@ -96,8 +96,12 @@ dict_get(dictObject *self, PyObject *args) {
 
 static int 
 dict_ass_subscript(dictObject *self, PyObject *key, PyObject *val) {
-    // printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
-    return dictimpl_ass_subscript(DICTIMPL(self), key, val);
+    printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
+    if (val != NULL) {
+        return dictimpl_setitem(DICTIMPL(self), key, val);
+    } else {
+        return dictimpl_delitem(DICTIMPL(self), key);
+    }
 }
 
 static PyMethodDef dict_methods[] = {
@@ -138,8 +142,8 @@ static PyTypeObject dictType = {
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
-    // Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    // Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "dict objects",          /* tp_doc */
     (traverseproc) dict_tp_traverse, /* tp_traverse */
     (inquiry) dict_tp_clear,     /* tp_clear */

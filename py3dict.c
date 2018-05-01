@@ -12,7 +12,7 @@ initpy3dict(void)
 {
     PyObject *m;
 
-    // dictType.tp_new = PyType_GenericNew;
+    dictType.tp_name = "py3dict";
     if (PyType_Ready(&dictType) < 0)
         return;
 

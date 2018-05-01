@@ -2,13 +2,13 @@ from distutils.core import setup, Extension
 
 tbdictmodule = Extension(
     'tbdict', 
-    sources = ['tbdict.c', 'dictimpl.c'], 
+    sources = ['tbdict.c', 'dictimpl_tb.c'], 
     extra_compile_args = ["-Wno-comments"], 
     )
 
 py3dictmodule = Extension(
     'py3dict', 
-    sources = ['py3dict.c', 'dictimpl.c'], 
+    sources = ['py3dict.c', 'dictimpl_py3.c'], 
     extra_compile_args = ["-Wno-comments"], 
     )
 

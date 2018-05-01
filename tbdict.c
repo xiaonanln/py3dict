@@ -12,10 +12,10 @@ inittbdict(void)
 {
     PyObject *m;
 
-    // dictType.tp_new = PyType_GenericNew;
+    dictType.tp_name = "tbdict";
     if (PyType_Ready(&dictType) < 0)
         return;
-
+    
     m = Py_InitModule("tbdict", ModuleMethods);
     if (m == NULL)
         return;
