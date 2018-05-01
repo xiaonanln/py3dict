@@ -23,7 +23,7 @@ def main():
         InsertKeys.append(keys)
 
     print 'testing ...'
-    for dictClass in (dict, tbdict.tbdict, py3dict.py3dict):
+    for dictClass in (dict, tbdict.tbdict):
         random.seed(0)
         benchmark(dictClass.__name__, dictClass)
 

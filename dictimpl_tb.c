@@ -150,7 +150,7 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
             assert(newhash != -1);
 
             // move the node to new array
-            arrayidx = newhash % newarraylen;
+            arrayidx = ((unsigned long)newhash) % newarraylen;
             node->next = newarray[arrayidx];
             newarray[arrayidx] = node;
 
@@ -187,8 +187,9 @@ int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
         return -1;
     }
 
-    hash = hash % d->arraylen;
+    hash = (unsigned long)hash % d->arraylen;
     node = d->array[hash];
+    printf("hash %ld, arraylen %d, node %p\n", hash, d->arraylen, node);
     
     while (node != NULL) {
         int cmp;
@@ -221,7 +222,7 @@ int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
     if (d->len > d->arraylen * MAX_FRACTION) {
         dictimpl_resize(d, d->arraylen << 1);
     }
-    // printf("ass_subscript returns\n");
+    printf("setitem returns\n");
     return 0;
 }
 
@@ -238,7 +239,7 @@ int dictimpl_delitem(struct dictimpl *d, PyObject *key) {
         return -1;
     }
 
-    hash = hash % d->arraylen;
+    hash = (unsigned long)hash % d->arraylen;
     pnode = &d->array[hash];
     node = d->array[hash];
     
@@ -279,7 +280,7 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
         return NULL;
     }
 
-    hash %= d->arraylen;
+    hash = (unsigned long)hash % d->arraylen;
     node = d->array[hash];
 
     while (node != NULL) {
@@ -312,7 +313,7 @@ PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
         return NULL;
     }
 
-    hash %= d->arraylen;
+    hash = (unsigned long)hash % d->arraylen;
     node = d->array[hash];
     while (node != NULL) {
         cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
