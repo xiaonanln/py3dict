@@ -7,6 +7,11 @@
 //     t->tp_new()
 // }
 
+#define MIN_FRACTION        (0.2)
+#define MAX_FRACTION        (0.666)
+#define INITIAL_ARRAY_LEN   (8)
+#define MIN_ARRAY_LEN       (8)
+
 struct listnode {
     PyObject *key;
     PyObject *val;
@@ -52,35 +57,52 @@ static void setlistnodeval(struct listnode *node, PyObject *val) {
     node->val = val;
 }
 
+static struct listnode **
+newhasharray(Py_ssize_t size) {
+    struct listnode **array;
+    array = PyMem_NEW(struct listnode *, size);
+    if (array != NULL) {
+        Py_ssize_t i;
+        for (i = 0; i < size; i++) {
+            array[i] = NULL;
+        }
+    }
+    return array;
+}
+
+
 struct dictimpl {
     Py_ssize_t len;
-    int arraylen;
-    struct listnode *array[8];
+    Py_ssize_t arraylen;
+    struct listnode **array;
 };
 
 struct dictimpl *dictimpl_new() {
-    struct dictimpl *d = PyMem_New(struct dictimpl, 1);
-    int i;
+    struct listnode **array;
+    struct dictimpl *d = PyMem_NEW(struct dictimpl, 1);
+
     if (d == NULL) {
         return NULL;
     }
-    d->len = 0;
-    d->arraylen = ARRAY_LEN(d->array);
-    for (i = 0; i < d->arraylen; i++) {
-        // printf("init array[%d] from %p to %p\n", i, d->array[i], NULL);
-        d->array[i] = NULL;
+
+    array = newhasharray(INITIAL_ARRAY_LEN);
+    if (array == NULL) {
+        PyMem_FREE(d);
+        return NULL;
     }
+
+    d->array = array;
+    d->len = 0;
+    d->arraylen = INITIAL_ARRAY_LEN;
     
     return d ;
 }
 
 void dictimpl_free(struct dictimpl *d) {
     assert(d);
-    int i;
-    for (i = 0; i < d->arraylen; i++) {
-        freelist(d->array[i]);
-        d->array[i] = NULL;
-    }
+    assert(d->array);
+    dictimpl_clear(d);
+    PyMem_FREE(d->array);
     PyMem_FREE(d);
 }
 
@@ -97,14 +119,68 @@ Py_ssize_t dictimpl_sizeof(struct dictimpl *d) {
     return size;
 }
 
-int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
-    int hash = PyObject_Hash(key) % d->arraylen;
-    int cmp;
 
-    struct listnode **pnode = &d->array[hash];
-    struct listnode *node = d->array[hash];
-    
+static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
+    // printf("dictimpl_resize: from %ld to %ld ...\n", d->arraylen, newarraylen);
+    struct listnode **newarray = NULL;
+    int i;
+    struct listnode *node;
+
+    newarray = newhasharray(newarraylen);
+    if (newarray == NULL) {
+        goto fail;
+    }
+
+    for (i = 0; i < d->arraylen; i++) {
+        node = d->array[i];
+        d->array[i] = NULL;
+
+        while (node != NULL) {
+            long newhash;
+            struct listnode *next;
+            next = node->next; 
+
+            newhash = PyObject_Hash(node->key);
+            assert(newhash != -1);
+
+            // move the node to new array
+            newhash %= newarraylen;
+            node->next = newarray[newhash];
+            newarray[newhash] = node;
+
+            node = next; 
+        }
+    }
+
+    d->array = newarray; 
+    d->arraylen = newarraylen;
+    return 0;
+
+fail:
+    if (newarray != NULL) {
+        PyMem_FREE(newarray);
+        newarray = NULL;
+    }
+    return -1;
+}
+
+
+int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
+    long hash;
+    int cmp;
+    struct listnode **pnode;
+    struct listnode *node;
+
     assert(key);
+
+    hash = PyObject_Hash(key);
+    if (hash == -1) {
+        return -1;
+    }
+
+    hash = hash % d->arraylen;
+    pnode = &d->array[hash];
+    node = d->array[hash];
     
     while (node != NULL) {
 	    assert(node->key);
@@ -121,6 +197,9 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
                 *pnode = node->next; 
                 freelistnode(node);
                 d->len -= 1;
+                if (d->arraylen > MIN_ARRAY_LEN && d->len < d->arraylen * MIN_FRACTION) {
+                    dictimpl_resize(d, d->arraylen >> 1);
+                }
             }
             return 0;
         } else {
@@ -147,14 +226,27 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
     node->next = d->array[hash];
     d->array[hash] = node;
     d->len += 1;
+    if (d->len > d->arraylen * MAX_FRACTION) {
+        dictimpl_resize(d, d->arraylen << 1);
+    }
     // printf("ass_subscript returns\n");
     return 0;
 }
 
 PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
-    int hash = PyObject_Hash(key) % d->arraylen;
-    struct listnode *node = d->array[hash];
+    long hash;
+    struct listnode *node;
     int cmp;
+    assert(d);
+    assert(key);
+
+    hash = PyObject_Hash(key);
+    if (hash == -1) {
+        return NULL;
+    }
+
+    hash %= d->arraylen;
+    node = d->array[hash];
 
     while (node != NULL) {
         cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
@@ -173,12 +265,20 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
 }
 
 PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
-    int hash = PyObject_Hash(key) % d->arraylen;
-    struct listnode *node = d->array[hash];
+    long hash;
+    struct listnode *node;
     int cmp;
 
     assert(key);
     assert(failobj);
+    
+    hash = PyObject_Hash(key);
+    if (hash == -1) {
+        return NULL;
+    }
+
+    hash %= d->arraylen;
+    node = d->array[hash];
     while (node != NULL) {
         cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
         if (cmp < 0) {
@@ -195,4 +295,29 @@ PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
     return failobj;
 }
 
+int dictimpl_clear(struct dictimpl *d) {
+    int i;
+    assert(d);
 
+    for (i = 0; i < d->arraylen; i++) {
+        freelist(d->array[i]);
+        d->array[i] = NULL;
+    }
+    d->len = 0;
+    return 0;
+}
+
+int dictimpl_traverse(struct dictimpl *d, visitproc visit, void *arg) {
+    int i;
+    struct listnode *node;
+    assert(d);
+    for (i = 0; i< d->arraylen; i++) {
+        node = d->array[i];
+        while (node != NULL) {
+            Py_VISIT(node->key);
+            Py_VISIT(node->val);
+            node = node->next;
+        }
+    }
+    return 0;
+}

@@ -73,6 +73,19 @@ class TestPy3Dict(unittest.TestCase):
             d[i] = i
         assert sys.getsizeof(d) > s0, (s0, sys.getsizeof(d))
 
+    def testGC(self):
+        d = py3dict()
+        d[1] = d 
+
+        import gc 
+        gc.collect()
+
+    def testResize(self):
+        d = py3dict()
+        for i in range(1000):
+            d[i] = i
+        for i in range(1000):
+            del d[i]
 
     def tearDown(self):
         # self.d.clear()

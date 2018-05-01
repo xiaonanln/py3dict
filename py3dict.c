@@ -39,9 +39,20 @@ static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kw
     return obj; 
 }
 
+static int 
+py3dict_tp_clear(Py3DictObject *self) {
+    // printf("tp_clear: dictimpl=%p\n", DICTIMPL(self));
+    return dictimpl_clear(DICTIMPL(self));
+}
+
+static int 
+py3dict_tp_traverse(Py3DictObject *self, visitproc visit, void *args) {
+    // printf("tp_traverse: dictimpl=%p\n", DICTIMPL(self));
+    return dictimpl_traverse(DICTIMPL(self), visit, args);
+}
+
 static void py3dict_dealloc(Py3DictObject* self) {
     // printf("__dealloc__: dictimpl=%p\n", DICTIMPL(self));
-
     dictimpl_free(DICTIMPL(self));
     DICTIMPL(self) = NULL;
     Py_TYPE(self)->tp_free(self);
@@ -129,22 +140,22 @@ static PyTypeObject py3dict_type = {
     0,                              /* tp_print */
     0,                              /* tp_getattr */
     0,                              /* tp_setattr */
-    0,                         /* tp_compare */
-    0,                         /* tp_repr */
-    0,                         /* tp_as_number */
-    0,                         /* tp_as_sequence */
-    &py3dict_mapping_methods,                         /* tp_as_mapping */
-    0,                         /* tp_hash */
+    0,                              /* tp_compare */
+    0,                              /* tp_repr */
+    0,                              /* tp_as_number */
+    0,                              /* tp_as_sequence */
+    &py3dict_mapping_methods,       /* tp_as_mapping */
+    0,                              /* tp_hash */
     0,                         /* tp_call */
     0,                         /* tp_str */
     0,                         /* tp_getattro */
     0,                         /* tp_setattro */
     0,                         /* tp_as_buffer */
-    // Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,   /* tp_flags */
+    // Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     "py3dict objects",          /* tp_doc */
-    0,                         /* tp_traverse */
-    0,                         /* tp_clear */
+    (traverseproc) py3dict_tp_traverse, /* tp_traverse */
+    (inquiry) py3dict_tp_clear,     /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */

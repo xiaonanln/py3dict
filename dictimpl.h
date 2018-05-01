@@ -16,4 +16,8 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key);
 PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj);
 Py_ssize_t dictimpl_sizeof(struct dictimpl *d);
 
+// tp_clear and tp_ for GC
+int dictimpl_clear(struct dictimpl *d);
+int dictimpl_traverse(struct dictimpl *d, visitproc visit, void *arg);
+
 #endif//DICTIMPL_H
