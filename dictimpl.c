@@ -87,6 +87,7 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
     assert(key);
     
     while (node != NULL) {
+	    assert(node->key);
         cmp = PyObject_RichCompareBool(node->key, key, Py_EQ);
         if (cmp < 0) {
             return -1;
@@ -94,7 +95,9 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
             // key exists
             if (val != NULL) {
                 // update node with new value
+		printf("before setlistnodeval\n");
                 setlistnodeval(node, val);
+		printf("after setlistnodeval\n");
             } else {
                 // remove node
                 *pnode = node->next; 
@@ -113,16 +116,20 @@ int dictimpl_ass_subscript(struct dictimpl *d, PyObject *key, PyObject *val) {
         PyErr_SetObject(PyExc_KeyError, key);
         return -1;
     }
-
+	
     node = newlistnode(key, val);
+    printf("newlistnode %p, keyref=%d\n", node, Py_REFCNT(key));
     if (node == NULL) {
+    	printf("nomemory\n");
         PyErr_NoMemory();
         return -1;
     }
 
+    	printf("put to array: node=%p, hash=%d, d=%p, array=%p\n", node, hash, d, d->array[hash]);
     node->next = d->array[hash];
     d->array[hash] = node;
     d->len += 1;
+    printf("ass_subscript returns\n");
     return 0;
 }
 

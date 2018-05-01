@@ -40,9 +40,9 @@ static PyObject *py3dict_new(PyTypeObject *subtype, PyObject *args, PyObject *kw
 }
 
 static void py3dict_dealloc(Py3DictObject* self) {
-    struct dictimpl *d = DICTIMPL(self);
-    // printf("__dealloc__: dictimpl=%p\n", d);
-    PyMem_Free(d);
+    printf("__dealloc__: dictimpl=%p\n", DICTIMPL(self));
+    PyMem_Free(DICTIMPL(self));
+    DICTIMPL(self) = NULL;
     Py_TYPE(self)->tp_free(self);
 }
 
@@ -90,7 +90,7 @@ py3dict_get(Py3DictObject *self, PyObject *args) {
 
 static int 
 py3dict_ass_subscript(Py3DictObject *self, PyObject *key, PyObject *val) {
-    // printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
+    printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
     return dictimpl_ass_subscript(DICTIMPL(self), key, val);
 }
 
