@@ -9,7 +9,7 @@
 
 #define MIN_FRACTION        (0.2)
 #define MAX_FRACTION        (0.666)
-#define INITIAL_ARRAY_LEN   (8)
+#define INITIAL_ARRAY_LEN   (2048)
 #define MIN_ARRAY_LEN       (8)
 
 struct dictentry {
@@ -20,6 +20,7 @@ struct dictentry {
 
 #define DICTENTRY_IS_CLEAR(de) ((de)->hash == -1)
 #define DICTENTRY_IS_DUMMY(de) ((de)->key == NULL && (de)->hash != -1)
+#define DICTENTRY_IS_EMPTY(de) ((de)->key == NULL) // EMPTY == CLEAR || DUMMY
 
 static inline void 
 dictentry_init(struct dictentry *entry) {
@@ -31,7 +32,7 @@ dictentry_init(struct dictentry *entry) {
 static inline void 
 dictentry_set(struct dictentry *entry, PyObject *key, PyObject *val, long hash) {
     assert(entry);
-    assert(DICTENTRY_IS_CLEAR(entry));
+    assert(DICTENTRY_IS_EMPTY(entry));
     assert(key); 
     assert(val);
     assert(hash != -1);
@@ -45,7 +46,7 @@ dictentry_set(struct dictentry *entry, PyObject *key, PyObject *val, long hash) 
 static inline void 
 dictentry_update(struct dictentry *entry, PyObject *val) {
     assert(entry);
-    assert(!DICTENTRY_IS_CLEAR(entry) && !DICTENTRY_IS_DUMMY(entry));
+    assert(!DICTENTRY_IS_EMPTY(entry));
     assert(entry->val);
     assert(val);
     Py_DECREF(entry->val);
@@ -84,46 +85,6 @@ fast_eq(struct dictentry *entry, PyObject *key, long hash) {
 
     // printf("PyObject_RichCompareBool %d  %p == %p ?!!!\n", PyObject_RichCompareBool(entry->key, key, Py_EQ), entry->key, key);
     return PyObject_RichCompareBool(entry->key, key, Py_EQ);
-}
-
-// static struct dictentry *
-// newdictentry(long hash, PyObject *key, PyObject *val) {
-//     struct dictentry *entry = PyMem_New(struct dictentry, 1);
-//     if (entry != NULL) {
-//         Py_INCREF(key);
-//         Py_INCREF(val);
-//         entry->hash = hash;
-//         entry->key = key;
-//         entry->val = val;
-//         entry->next = NULL;
-//     }
-//     return entry;
-// }
-
-// static void
-// freedictentry(struct dictentry *entry) {
-//     assert(entry && entry->key && entry->val);
-//     Py_DECREF(entry->key);
-//     Py_DECREF(entry->val);
-//     PyMem_FREE(entry);
-// }
-
-// static void 
-// freelist(struct dictentry *head) {
-//     struct dictentry *next;
-//     while (head != NULL) {
-//         next = head->next;
-//         freedictentry(head);
-//         head = next; 
-//     }
-// }
-
-static void setdictentryval(struct dictentry *entry, PyObject *val) {
-    assert(val);
-    assert(entry->val);
-    Py_INCREF(val);
-    Py_DECREF(entry->val);
-    entry->val = val;
 }
 
 static struct dictentry *
@@ -196,6 +157,7 @@ Py_ssize_t dictimpl_sizeof(struct dictimpl *d) {
 
 static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
     // printf("dictimpl_resize: from %ld to %ld ...\n", d->arraylen, newarraylen);
+    
     return 0;
 //     struct dictentry **newarray = NULL;
 //     int i;
@@ -238,11 +200,82 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
 //     return -1;
 }
 
+static int lookup(struct dictimpl *d, PyObject *key, long hash, int *hashpos, PyObject **pval) {
+    struct dictentry *array, *entry;
+    int arrayidx, arraylen, firstDummyIdx, beginarrayidx;
+
+    assert(d);
+    assert(key);
+
+    if (hashpos != NULL) {
+        *hashpos = -1;
+    }
+
+    if (pval != NULL) {
+        *pval = NULL;
+    }
+
+    hash = PyObject_Hash(key);
+    if (hash == -1) {
+        return -1;
+    }
+    
+    array = d->array;
+    arraylen = d->arraylen;
+    beginarrayidx = arrayidx = (unsigned long)hash % arraylen;
+    // assert(arraylen > d->len); // make sure there are free entries
+
+    firstDummyIdx = -1;
+    entry = &array[arrayidx];
+    while (!DICTENTRY_IS_CLEAR(entry)) {
+        int cmp;
+
+        if DICTENTRY_IS_DUMMY(entry) {
+            if (firstDummyIdx == -1) {
+                firstDummyIdx = arrayidx;
+            }
+        } else {
+            cmp = fast_eq(entry, key, hash);
+            if (cmp < 0) {
+                return -1;
+            }  else if (cmp > 0) {
+                // found key 
+                if (hashpos != NULL) {
+                    *hashpos = arrayidx;
+                }
+                if (pval != NULL) {
+                    *pval = entry->val;
+                }
+                return 0;
+            } 
+        }
+
+        arrayidx = (arrayidx + 1) % arraylen;
+        if (arrayidx == beginarrayidx) {
+            break; 
+        }
+        entry = &array[arrayidx];
+    }
+
+    // foud a clear entry, or the full array is traversed
+    if (hashpos != NULL) {
+        if (firstDummyIdx != -1) {
+            *hashpos = firstDummyIdx;
+        } else if (DICTENTRY_IS_CLEAR(entry)) {
+            *hashpos = arrayidx;
+        }
+    }
+    return 0;
+}
+
 int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
     long hash;
-    struct dictentry *array, *entry;
-    int arrayidx, arraylen, firstDummyIdx;
+    int hashpos;
+    struct dictentry *entry;
+    PyObject *oldval;
+    int lkret;
 
+    assert(d);
     assert(key);
     assert(val);
 
@@ -251,93 +284,60 @@ int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
         return -1;
     }
     
-    array = d->array;
-    arraylen = d->arraylen;
-    arrayidx = (unsigned long)hash % arraylen;
-    assert(arraylen > d->len); // make sure there are free entries
-
-    firstDummyIdx = -1;
-    while (!DICTENTRY_IS_CLEAR(&array[arrayidx])) {
-        struct dictentry *entry;
-        int cmp;
-
-        entry = &array[arrayidx];
-        if DICTENTRY_IS_DUMMY(entry) {
-            if (firstDummyIdx == -1) {
-                firstDummyIdx = arrayidx;
-            }
-            continue ;
-        }
-
-        cmp = fast_eq(entry, key, hash);
-        if (cmp < 0) {
-            return -1;
-        }  else if (cmp > 0) {
-            dictentry_update(entry, val);
-            return 0;
-        } else {
-            arrayidx = (arrayidx + 1) % arraylen;
-        }
+    lkret = lookup(d, key, hash, &hashpos, &oldval);
+    if (lkret < 0) {
+        return lkret;
     }
 
-    // eventually will find a empty entry
-    if (firstDummyIdx != -1) {
-
+    assert(hashpos != -1);
+    entry = &d->array[hashpos];
+    if (oldval == NULL) {
+        dictentry_set(entry, key, val, hash);
+        d->len += 1;
+    } else {
+        dictentry_update(entry, val);
     }
-    
-    entry = &array[arrayidx];
-    dictentry_set(entry, key, val, hash);
     return 0;
 }
 
 int dictimpl_delitem(struct dictimpl *d, PyObject *key) {
     long hash;
-    int cmp;
-    struct dictentry *array, *entry;
-    int arrayidx, arraylen;
+    struct dictentry *entry;
+    int lkret;
+    int hashpos;
+    PyObject *oldval;
 
+    assert(d);
     assert(key);
 
     hash = PyObject_Hash(key);
     if (hash == -1) {
         return -1;
     }
-
-    array = d->array;
-    arraylen = d->arraylen;
-    arrayidx = (unsigned long)hash % arraylen;
-    entry = &array[arrayidx];
     
-    while (!DICTENTRY_IS_CLEAR(entry)) {
-	    assert(entry->key);
-        cmp = fast_eq(entry, key, hash);
-        if (cmp < 0) {
-            return -1;
-        } else if (cmp > 0) {
-            // key exists, remove entry
-            *pnode = entry->next; 
-            freedictentry(entry);
-            d->len -= 1;
-            if (d->arraylen > MIN_ARRAY_LEN && d->len < d->arraylen * MIN_FRACTION) {
-                dictimpl_resize(d, d->arraylen >> 1);
-            }
-            return 0;
-        } else {
-            pnode = &entry->next;
-            entry = entry->next;
-        }
+    lkret = lookup(d, key, hash, &hashpos, &oldval);
+    if (lkret < 0) {
+        return lkret;
     }
 
-    // key not exists, del raise KeyError
-    PyErr_SetObject(PyExc_KeyError, key);
-    return -1;
+    if (oldval != NULL) {
+        assert(hashpos != -1);
+        entry = &d->array[hashpos];
+        dictentry_del(entry);
+        d->len -= 1;
+        return 0;
+    } else {
+        // key not exists, raise KeyError
+        PyErr_SetObject(PyExc_KeyError, key);
+        return -1;
+    }
 }
 
 PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
     long hash;
-    struct dictentry *entry;
-    int cmp;
-    int arrayidx;
+    int lkret;
+    PyObject *oldval;
+
     assert(d);
     assert(key);
 
@@ -346,30 +346,28 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
         return NULL;
     }
 
-    arrayidx = (unsigned long)hash % d->arraylen;
-    entry = d->array[arrayidx];
-
-    while (entry != NULL) {
-        cmp = fast_eq(entry, key, hash);
-        if (cmp < 0) {
-            return NULL;
-        } else if (cmp > 0) {
-            Py_INCREF(entry->val);
-            return entry->val;
-        } else {
-            entry = entry->next;
-        }
+    lkret = lookup(d, key, hash, NULL, &oldval);
+    if (lkret < 0) {
+        return NULL;
     }
 
-    PyErr_SetObject(PyExc_KeyError, key);
-    return NULL;
+    if (oldval != NULL) {
+        Py_INCREF(oldval);
+        return oldval;
+    } else {
+        PyErr_SetObject(PyExc_KeyError, key);
+        return NULL;
+    }
 }
 
 PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
-    long hash, arrayidx;
+    long hash;
     struct dictentry *entry;
-    int cmp;
+    int hashpos;
+    PyObject *val;
+    int lkret;
 
+    assert(d);
     assert(key);
     assert(failobj);
     
@@ -378,47 +376,42 @@ PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
         return NULL;
     }
 
-    arrayidx = (unsigned long)hash % d->arraylen;
-    entry = d->array[arrayidx];
-    while (entry != NULL) {
-        cmp = fast_eq(entry, key, hash);
-        if (cmp < 0) {
-            return NULL;
-        } else if (cmp > 0) {
-            Py_INCREF(entry->val);
-            return entry->val;
-        } else {
-            entry = entry->next;
-        }
+    lkret = lookup(d, key, hash, &hashpos, &val);
+    if (lkret < 0) {
+        return NULL;
     }
 
-    Py_INCREF(failobj);
-    return failobj;
+    if (val == NULL) {
+        val = failobj;
+    }
+
+    Py_INCREF(val);
+    return val;
 }
 
 int dictimpl_clear(struct dictimpl *d) {
-    int i;
-    assert(d);
+    // int i;
+    // assert(d);
 
-    for (i = 0; i < d->arraylen; i++) {
-        freelist(d->array[i]);
-        d->array[i] = NULL;
-    }
-    d->len = 0;
+    // for (i = 0; i < d->arraylen; i++) {
+    //     freelist(d->array[i]);
+    //     d->array[i] = NULL;
+    // }
+    // d->len = 0;
     return 0;
 }
 
 int dictimpl_traverse(struct dictimpl *d, visitproc visit, void *arg) {
-    int i;
-    struct dictentry *entry;
-    assert(d);
-    for (i = 0; i< d->arraylen; i++) {
-        entry = d->array[i];
-        while (entry != NULL) {
-            Py_VISIT(entry->key);
-            Py_VISIT(entry->val);
-            entry = entry->next;
-        }
-    }
+    // int i;
+    // struct dictentry *entry;
+    // assert(d);
+    // for (i = 0; i< d->arraylen; i++) {
+    //     entry = d->array[i];
+    //     while (entry != NULL) {
+    //         Py_VISIT(entry->key);
+    //         Py_VISIT(entry->val);
+    //         entry = entry->next;
+    //     }
+    // }
     return 0;
 }
