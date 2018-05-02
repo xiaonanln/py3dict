@@ -9,7 +9,7 @@ if not DEBUG:
     extra_compile_args.append('-DNDEBUG')
 else:
     undef_macros.append('NDEBUG')
-
+    extra_compile_args.append('-O0') 
 
 tbdictmodule = Extension(
     'tbdict', 
