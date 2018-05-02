@@ -3,3 +3,4 @@ build/
 *.pyd
 .vscode/
 _gsdata_/
+*.so

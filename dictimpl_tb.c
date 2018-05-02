@@ -340,6 +340,7 @@ int dictimpl_clear(struct dictimpl *d) {
         d->array[i] = NULL;
     }
     d->len = 0;
+    dictimpl_resize(d, MIN_ARRAY_LEN);
     return 0;
 }
 

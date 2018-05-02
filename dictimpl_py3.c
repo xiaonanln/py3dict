@@ -18,9 +18,13 @@ struct dictentry {
     PyObject *val;
 };
 
-#define DICTENTRY_IS_CLEAR(de) ((de)->hash == -1)
-#define DICTENTRY_IS_DUMMY(de) ((de)->key == NULL && (de)->hash != -1)
-#define DICTENTRY_IS_EMPTY(de) ((de)->key == NULL) // EMPTY == CLEAR || DUMMY
+#define DICTENTRY_IS_CLEAR(de)      ((de)->hash == -1)
+#define DICTENTRY_IS_DUMMY(de)      ((de)->key == NULL && (de)->hash != -1)
+#define DICTENTRY_IS_EMPTY(de)      ((de)->key == NULL) // EMPTY == CLEAR || DUMMY
+#define DICTENTRY_CLEAR_DUMMY(de)   do {    \
+    assert(DICTENTRY_IS_DUMMY(de));         \
+    (de)->hash = -1;                        \
+} while(0)
 
 static inline void 
 dictentry_init(struct dictentry *oldentry) {
@@ -418,28 +422,42 @@ PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
 }
 
 int dictimpl_clear(struct dictimpl *d) {
-    // int i;
-    // assert(d);
+    Py_ssize_t i;
+    struct dictentry *array;
 
-    // for (i = 0; i < d->arraylen; i++) {
-    //     freelist(d->array[i]);
-    //     d->array[i] = NULL;
-    // }
-    // d->len = 0;
+	assert(d);
+    array = d->array;
+    for (i = 0; i < d->arraylen; i++) {
+        struct dictentry *entry;
+        entry = &array[i];
+        if (!DICTENTRY_IS_EMPTY(entry)) {
+            dictentry_del(entry);
+        } else if (DICTENTRY_IS_DUMMY(entry)) {
+            DICTENTRY_CLEAR_DUMMY(entry);
+        }
+    }
+    d->len = 0;
+
+    dictimpl_resize(d, MIN_ARRAY_LEN);
+
     return 0;
 }
 
 int dictimpl_traverse(struct dictimpl *d, visitproc visit, void *arg) {
-    // int i;
-    // struct dictentry *oldentry;
-    // assert(d);
-    // for (i = 0; i< d->arraylen; i++) {
-    //     oldentry = d->array[i];
-    //     while (oldentry != NULL) {
-    //         Py_VISIT(oldentry->key);
-    //         Py_VISIT(oldentry->val);
-    //         oldentry = oldentry->next;
-    //     }
-    // }
+    Py_ssize_t i;
+    struct dictentry *array;
+
+    assert(d);
+
+    array = d->array;
+
+    for (i = 0; i< d->arraylen; i++) {
+        struct dictentry *entry;
+        entry  = &array[i];
+        if (!DICTENTRY_IS_EMPTY(entry)) {
+            Py_VISIT(entry->key);
+            Py_VISIT(entry->val);
+        }
+    }
     return 0;
 }

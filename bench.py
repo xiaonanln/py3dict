@@ -7,14 +7,14 @@ import sys
 import string
 from itertools import izip 
 
-BENCH_N = 10000
+BENCH_N = 50000
 SIZE_RANGE = 4, 16
 STR_LENGTH_RANGE = 4, 32
 AVG_SIZE = sum(SIZE_RANGE) // 2
 US_PER_SECOND = 1000000
 
 InsertKeys = []
-CheckKeys = []
+CheckKeys = InsertKeys
 
 def main():
     random.seed(0)
@@ -23,7 +23,6 @@ def main():
         size = random.randint(*SIZE_RANGE)
         keys = [ randstr(*STR_LENGTH_RANGE) for _ in xrange(size) ]
         InsertKeys.append(keys)
-        CheckKeys.append([k[::] for k in keys])
 
     print 'testing ...'
     for dictClass in (dict, tbdict.tbdict, py3dict.py3dict):
