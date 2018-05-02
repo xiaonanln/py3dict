@@ -445,11 +445,9 @@ int dictimpl_clear(struct dictimpl *d) {
 
 int dictimpl_traverse(struct dictimpl *d, visitproc visit, void *arg) {
     Py_ssize_t i;
-    struct dictentry *array;
-
     assert(d);
 
-    array = d->array;
+    struct dictentry *array = d->array;
 
     for (i = 0; i< d->arraylen; i++) {
         struct dictentry *entry;

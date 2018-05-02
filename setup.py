@@ -3,7 +3,7 @@ from distutils.core import setup, Extension
 DEBUG = True
 
 undef_macros = []
-extra_compile_args = ["-Wno-comments"]
+extra_compile_args = ["-Wno-comments", "-std=c99"]
 
 if not DEBUG:
     extra_compile_args.append('-DNDEBUG')
