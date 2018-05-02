@@ -126,7 +126,7 @@ Py_ssize_t dictimpl_sizeof(struct dictimpl *d) {
 
 
 static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
-    printf("dictimpl_resize: from %ld to %ld ...\n", d->arraylen, newarraylen);
+    // printf("dictimpl_resize: from %ld to %ld ...\n", d->arraylen, newarraylen);
     return 0;
     struct listnode **newarray = NULL;
     int i;
@@ -158,9 +158,9 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
         }
     }
 
-    printf("freehasharray begin\n");
+    // printf("freehasharray begin\n");
     freehasharray(d->array);
-    printf("freehasharray end\n");
+    // printf("freehasharray end\n");
 
     d->array = newarray; 
     d->arraylen = newarraylen;
@@ -189,7 +189,7 @@ int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
 
     hash = (unsigned long)hash % d->arraylen;
     node = d->array[hash];
-    printf("hash %ld, arraylen %d, node %p\n", hash, d->arraylen, node);
+    // printf("hash %ld, arraylen %d, node %p\n", hash, d->arraylen, node);
     
     while (node != NULL) {
         int cmp;
@@ -222,7 +222,7 @@ int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
     if (d->len > d->arraylen * MAX_FRACTION) {
         dictimpl_resize(d, d->arraylen << 1);
     }
-    printf("setitem returns\n");
+    // printf("setitem returns\n");
     return 0;
 }
 

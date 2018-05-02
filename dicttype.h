@@ -75,7 +75,7 @@ dict_sizeof(dictObject *self)
 
 static PyObject *
 dict_subscript(dictObject *self, PyObject *key) {
-    printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
+    // printf("__getitem__: dictimpl=%p\n", DICTIMPL(self));
     PyObject *val = dictimpl_subscript(DICTIMPL(self), key);
     // if (val != NULL) {
     //     // printf("__getitem__ val refcount = %ld\n", Py_REFCNT(val));
@@ -96,7 +96,7 @@ dict_get(dictObject *self, PyObject *args) {
 
 static int 
 dict_ass_subscript(dictObject *self, PyObject *key, PyObject *val) {
-    printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
+    // printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
     if (val != NULL) {
         return dictimpl_setitem(DICTIMPL(self), key, val);
     } else {
