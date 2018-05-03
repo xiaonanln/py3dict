@@ -1,6 +1,6 @@
 from distutils.core import setup, Extension
 
-DEBUG = True
+DEBUG = False
 WARN_UNUSED_VARIABLES = False
 
 undef_macros = []

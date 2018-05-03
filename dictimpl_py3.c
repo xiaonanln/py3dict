@@ -7,34 +7,71 @@
 //     t->tp_new()
 // }
 
-#define MIN_FRACTION        (0.2)
-#define MAX_FRACTION        (0.666)
-#define INITIAL_ARRAY_LEN   (8)
-#define MIN_ARRAY_LEN       (8)
+#define MIN_FRACTION        (0.5)
+#define MAX_FRACTION        (0.8)
+#define INITIAL_ARRAY_LEN   (4)
+#define MIN_ARRAY_LEN       (4)
 
 #ifndef Py_hash_t
 #define Py_hash_t long
 #endif
 
+#define DICT_ENTRY_HASH_CACHE   (0)
+
 struct dictentry {
+#if DICT_ENTRY_HASH_CACHE
     Py_hash_t hash;
+#endif 
     PyObject *key;
     PyObject *val;
 };
 
+#if DICT_ENTRY_HASH_CACHE
 #define DICTENTRY_IS_CLEAR(de)      ((de)->hash == -1)
 #define DICTENTRY_IS_DUMMY(de)      ((de)->key == NULL && (de)->hash != -1)
 #define DICTENTRY_IS_EMPTY(de)      ((de)->key == NULL) // EMPTY == CLEAR || DUMMY
+#define DICTENTRY_SET_DUMMY(de) do {    \
+    assert(!DICTENTRY_IS_EMPTY(de));    \
+    (de)->key = NULL;                   \
+    (de)->val = NULL;                   \
+    (de)->hash = 0;                     \
+} while(0)
+
 #define DICTENTRY_CLEAR_DUMMY(de)   do {    \
     assert(DICTENTRY_IS_DUMMY(de));         \
     (de)->hash = -1;                        \
 } while(0)
 
+#define DICTENTRY_GET_HASH(de)  (assert(!DICTENTRY_IS_EMPTY(de)), (de)->hash)
+
+#else // if !DICT_ENTRY_HASH_CACHE
+#define DICTENTRY_IS_CLEAR(de)      ((de)->val == NULL)
+#define DICTENTRY_IS_DUMMY(de)      ((void *)(de)->val == (void *)(de))
+#define DICTENTRY_IS_EMPTY(de)      ((de)->key == NULL)  // EMPTY == CLEAR || DUMMY
+
+#define DICTENTRY_SET_DUMMY(de) do {    \
+    assert(!DICTENTRY_IS_EMPTY(de));    \
+    (de)->key = NULL;                   \
+    (de)->val = (PyObject *)(void *)(de);                   \
+} while(0)
+
+#define DICTENTRY_CLEAR_DUMMY(de)   do {    \
+    assert(DICTENTRY_IS_DUMMY(de));         \
+    (de)->val = NULL;                       \
+} while(0)
+
+#define DICTENTRY_GET_HASH(de)  (assert(!DICTENTRY_IS_EMPTY(de)), PyObject_Hash(de->key))
+
+#endif // if DICT_ENTRY_HASH_CACHE
+
 static inline void 
 dictentry_init(struct dictentry *oldentry) {
     assert(oldentry);
+#if DICT_ENTRY_HASH_CACHE
     oldentry->hash = -1;
+#endif 
     oldentry->key = oldentry->val = NULL;
+    assert(DICTENTRY_IS_CLEAR(oldentry));
 }
 
 static inline void 
@@ -48,7 +85,9 @@ dictentry_set(struct dictentry *oldentry, PyObject *key, PyObject *val, Py_hash_
     Py_INCREF(val);
     oldentry->key = key;
     oldentry->val = val;
+    #if DICT_ENTRY_HASH_CACHE
     oldentry->hash = hash;
+    #endif 
 }
 
 static inline void 
@@ -72,9 +111,7 @@ dictentry_del(struct dictentry *oldentry) {
 
     Py_DECREF(oldentry->key);
     Py_DECREF(oldentry->val);
-    oldentry->key = NULL;
-    oldentry->val = NULL;
-    oldentry->hash = 0; // hash != -1 -> DUMMY
+    DICTENTRY_SET_DUMMY(oldentry);
 }
 
 static inline void 
@@ -84,10 +121,12 @@ dictentry_assign(struct dictentry *newentry, struct dictentry *oldentry) {
     assert(DICTENTRY_IS_CLEAR(newentry));
     assert(!DICTENTRY_IS_EMPTY(oldentry));
 
+    #if DICT_ENTRY_HASH_CACHE
     newentry->hash = oldentry->hash;
+    #endif 
     newentry->key = oldentry->key;
     newentry->val = oldentry->val;
-    oldentry->key = oldentry->val = NULL;
+    // oldentry->key = oldentry->val = NULL;
     return ;
 }
 
@@ -101,9 +140,11 @@ fast_eq(struct dictentry *oldentry, PyObject *key, Py_hash_t hash) {
         return 1;
     }
     
-    if (oldentry->hash != hash) {
+    #if DICT_ENTRY_HASH_CACHE
+    if (DICTENTRY_GET_HASH(oldentry) != hash) {
         return 0;
     }
+    #endif 
 
     // printf("PyObject_RichCompareBool %d  %p == %p ?!!!\n", PyObject_RichCompareBool(oldentry->key, key, Py_EQ), oldentry->key, key);
     return PyObject_RichCompareBool(oldentry->key, key, Py_EQ);
@@ -201,7 +242,7 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
             continue ;
         }
 
-        hash = oldentry->hash;
+        hash = DICTENTRY_GET_HASH(oldentry);
         idx = (size_t)hash % newarraylen;
         newentry = &newarray[idx];
         while (!DICTENTRY_IS_CLEAR(newentry)) { // there is no DUMMY in new array 
@@ -250,7 +291,7 @@ static int lookup(struct dictimpl *d, PyObject *key, Py_hash_t hash, Py_ssize_t 
     while (!DICTENTRY_IS_CLEAR(oldentry)) {
         int cmp;
 
-        if DICTENTRY_IS_DUMMY(oldentry) {
+        if (DICTENTRY_IS_DUMMY(oldentry)) {
             if (firstDummyIdx == -1) {
                 firstDummyIdx = arrayidx;
             }

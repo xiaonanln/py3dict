@@ -21,7 +21,7 @@ def main():
     print 'generating test keys ...'
     for i in range(BENCH_N):
         size = random.randint(*SIZE_RANGE)
-        keys = [ randstr(*STR_LENGTH_RANGE) for _ in xrange(size) ]
+        keys = [ (randstr(*STR_LENGTH_RANGE), randstr(*STR_LENGTH_RANGE)) for _ in xrange(size) ]
         InsertKeys.append(keys)
 
     print 'testing ...'
