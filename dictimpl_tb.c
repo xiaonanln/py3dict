@@ -331,6 +331,10 @@ PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
     return failobj;
 }
 
+PyObject *dictimpl_pop(struct dictimpl *d, PyObject *key, PyObject *failobj) {
+    Py_RETURN_NONE;
+}
+
 int dictimpl_clear(struct dictimpl *d) {
     int i;
     assert(d);

@@ -7,7 +7,7 @@ build:
 	cp build/lib.linux-x86_64-2.7/*.so ./
 
 test: clean build
-	python test_basic.py
+	python test_basic.py -v
 
 clean:
 	python setup.py clean

@@ -1,6 +1,7 @@
 from distutils.core import setup, Extension
 
 DEBUG = True
+WARN_UNUSED_VARIABLES = False
 
 undef_macros = []
 extra_compile_args = ["-Wno-comments", "-std=c99"]
@@ -10,6 +11,9 @@ if not DEBUG:
 else:
     undef_macros.append('NDEBUG')
     extra_compile_args.append('-O0') 
+
+if not WARN_UNUSED_VARIABLES:
+    extra_compile_args.append('-Wno-unused-variable')
 
 tbdictmodule = Extension(
     'tbdict', 

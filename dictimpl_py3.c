@@ -12,8 +12,12 @@
 #define INITIAL_ARRAY_LEN   (8)
 #define MIN_ARRAY_LEN       (8)
 
+#ifndef Py_hash_t
+#define Py_hash_t long
+#endif
+
 struct dictentry {
-    long hash;
+    Py_hash_t hash;
     PyObject *key;
     PyObject *val;
 };
@@ -34,7 +38,7 @@ dictentry_init(struct dictentry *oldentry) {
 }
 
 static inline void 
-dictentry_set(struct dictentry *oldentry, PyObject *key, PyObject *val, long hash) {
+dictentry_set(struct dictentry *oldentry, PyObject *key, PyObject *val, Py_hash_t hash) {
     assert(oldentry);
     assert(DICTENTRY_IS_EMPTY(oldentry));
     assert(key); 
@@ -88,7 +92,7 @@ dictentry_assign(struct dictentry *newentry, struct dictentry *oldentry) {
 }
 
 static inline int 
-fast_eq(struct dictentry *oldentry, PyObject *key, long hash) {
+fast_eq(struct dictentry *oldentry, PyObject *key, Py_hash_t hash) {
     assert(oldentry);
     assert(oldentry->key);
     assert(key);
@@ -172,7 +176,6 @@ Py_ssize_t dictimpl_sizeof(struct dictimpl *d) {
     return size;
 }
 
-
 static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
     // printf("dictimpl_resize: from %ld to %ld ...\n", d->arraylen, newarraylen);
     struct dictentry *newarray, *oldarray;
@@ -191,7 +194,7 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
 
     for (i = 0; i < oldarraylen; i++) {
         struct dictentry *oldentry, *newentry;
-        long hash;
+        Py_hash_t hash;
         Py_ssize_t idx;
         oldentry = &oldarray[i];
         if (DICTENTRY_IS_EMPTY(oldentry)) {
@@ -216,7 +219,13 @@ static int dictimpl_resize(struct dictimpl *d, Py_ssize_t newarraylen) {
     return 0;
 }
 
-static int lookup(struct dictimpl *d, PyObject *key, long hash, int *hashpos, PyObject **pval) {
+static void check_resize_after_del(struct dictimpl *d) {
+    if (d->arraylen > MIN_ARRAY_LEN && d->len < MIN_FRACTION * d->arraylen) {
+        dictimpl_resize(d, d->arraylen >> 1);
+    }
+}
+
+static int lookup(struct dictimpl *d, PyObject *key, Py_hash_t hash, Py_ssize_t *hashpos, PyObject **pval) {
     struct dictentry *array, *oldentry;
     int arrayidx, arraylen, firstDummyIdx, beginarrayidx;
 
@@ -280,9 +289,9 @@ static int lookup(struct dictimpl *d, PyObject *key, long hash, int *hashpos, Py
 }
 
 static int
-dictimpl_setitem_with_hash(struct dictimpl *d, PyObject *key, PyObject *val, long hash) {
+dictimpl_setitem_with_hash(struct dictimpl *d, PyObject *key, PyObject *val, Py_hash_t hash) {
     int err; 
-    int hashpos;
+    Py_ssize_t hashpos;
     PyObject *oldval;
     struct dictentry *oldentry;
 
@@ -291,7 +300,7 @@ dictimpl_setitem_with_hash(struct dictimpl *d, PyObject *key, PyObject *val, lon
         return err;
     }
 
-    assert(hashpos != -1);
+    assert(hashpos >= 0 && hashpos < d->arraylen);
     oldentry = &d->array[hashpos];
     if (oldval == NULL) {
         dictentry_set(oldentry, key, val, hash);
@@ -303,7 +312,7 @@ dictimpl_setitem_with_hash(struct dictimpl *d, PyObject *key, PyObject *val, lon
 }
 
 int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
-    long hash;
+    Py_hash_t hash;
     int err;
 
     assert(d);
@@ -326,22 +335,14 @@ int dictimpl_setitem(struct dictimpl *d, PyObject *key, PyObject *val) {
 }
 
 int dictimpl_delitem(struct dictimpl *d, PyObject *key) {
-    long hash;
+    Py_hash_t hash;
     struct dictentry *oldentry;
     int err;
-    int hashpos;
+    Py_ssize_t hashpos;
     PyObject *oldval;
 
     assert(d);
     assert(key);
-
-
-    if (d->arraylen > MIN_ARRAY_LEN && d->len-1 < MIN_FRACTION * d->arraylen) {
-        err = dictimpl_resize(d, d->arraylen >> 1);
-        if (err < 0) {
-            return err; 
-        }
-    }
 
     hash = PyObject_Hash(key);
     if (hash == -1) {
@@ -354,10 +355,12 @@ int dictimpl_delitem(struct dictimpl *d, PyObject *key) {
     }
 
     if (oldval != NULL) {
-        assert(hashpos != -1);
+        assert(hashpos >= 0 && hashpos < d->arraylen);
         oldentry = &d->array[hashpos];
         dictentry_del(oldentry);
         d->len -= 1;
+
+        check_resize_after_del(d);
         return 0;
     } else {
         // key not exists, raise KeyError
@@ -366,8 +369,44 @@ int dictimpl_delitem(struct dictimpl *d, PyObject *key) {
     }
 }
 
+PyObject *dictimpl_pop(struct dictimpl *d, PyObject *key, PyObject *failobj) {
+    assert(d);
+    assert(key);
+
+    Py_hash_t hash = PyObject_Hash(key);
+    if (hash == -1) {
+        return NULL;
+    }
+
+    Py_ssize_t hashpos;
+    PyObject *oldval;
+    int err = lookup(d, key, hash, &hashpos, &oldval);
+    if (err < 0) {
+        return NULL;
+    }
+
+    if (oldval != NULL) {
+        assert(hashpos >= 0 && hashpos < d->arraylen);
+        struct dictentry *oldentry = &d->array[hashpos];
+        Py_INCREF(oldval);
+        dictentry_del(oldentry);
+        d->len -= 1;
+
+        check_resize_after_del(d);
+        return oldval;
+    } else if (failobj != NULL) {
+        Py_INCREF(failobj);
+        return failobj;
+    } else {
+        // key not exists, raise KeyError if failobj == NULL
+        PyErr_SetObject(PyExc_KeyError, key);
+        return NULL;
+    }
+}
+
+
 PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
-    long hash;
+    Py_hash_t hash;
     int err;
     PyObject *oldval;
 
@@ -394,8 +433,8 @@ PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key) {
 }
 
 PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj) {
-    long hash;
-    int hashpos;
+    Py_hash_t hash;
+    Py_ssize_t hashpos;
     PyObject *val;
     int err;
 

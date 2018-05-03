@@ -17,6 +17,7 @@ int dictimpl_delitem(struct dictimpl *d, PyObject *key);
 
 PyObject *dictimpl_subscript(struct dictimpl *d, PyObject *key);
 PyObject *dictimpl_get(struct dictimpl *d, PyObject *key, PyObject *failobj);
+PyObject *dictimpl_pop(struct dictimpl *d, PyObject *key, PyObject *failobj);
 Py_ssize_t dictimpl_sizeof(struct dictimpl *d);
 
 // tp_clear and tp_ for GC

@@ -68,14 +68,14 @@ class BaseTestDict(object):
         except KeyError:
             pass
 
-    # def testSizeOf(self):
-    #     self.d = self.dictClass()
-    #     s0 = sys.getsizeof(self.d)
-    #     assert s0  > 0, (self.d, s0)
+    def testSizeOf(self):
+        self.d = self.dictClass()
+        s0 = sys.getsizeof(self.d)
+        assert s0  > 0, (self.d, s0)
         
-    #     for i in range(100):
-    #         self.d[i] = i
-    #     assert sys.getsizeof(self.d) > s0, (s0, sys.getsizeof(self.d))
+        for i in range(100):
+            self.d[i] = i
+        assert sys.getsizeof(self.d) > s0, (s0, sys.getsizeof(self.d))
 
     def testGC(self):
         self.d = self.dictClass()
@@ -91,6 +91,43 @@ class BaseTestDict(object):
         for i in range(1000):
             del self.d[i]
 
+    def testRefCount(self):
+        k = 'any string'
+        rc = sys.getrefcount(k)
+        d = self.dictClass()
+        d[k] = 1
+        assert sys.getrefcount(k) == rc+1
+        d['somekey'] = k 
+        assert sys.getrefcount(k) == rc+2
+        del d['somekey']
+        assert sys.getrefcount(k) == rc+1
+        d[k] = k 
+        assert sys.getrefcount(k) == rc+2
+        del d 
+        assert sys.getrefcount(k) == rc 
+
+    def testPop(self):
+        if self.dictClass is tbdict:
+            return 
+
+        d = self.dictClass()
+        for i in range(10):
+            d[i] = i
+
+        try:
+            d.pop('nonexistkey')
+        except KeyError:
+            pass
+        except:
+            assert False, 'pop should raise KeyError'
+
+        assert d.pop('nonexistkey', None) is None 
+        assert d.pop('nonexistkey', 1) == 1
+        assert d.pop('nonexistkey', 2) == 2
+
+        for i in range(10):
+            assert d.pop(i) == i
+
     def tearDown(self):
         # self.self.d.clear()
         pass
@@ -102,6 +139,26 @@ class TestTBDict(BaseTestDict, unittest.TestCase):
 class TestPy3Dict(BaseTestDict, unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(TestPy3Dict, self).__init__(py3dict, *args, **kwargs)
+
+    def testClear(self):
+        d = self.dictClass()
+        keys = range(10)
+        for key in keys:
+            d[key] = 'somestring'
+
+        assert len(d) == 10 
+        d.clear()
+        assert len(d) == 0
+
+        k = 'somestring'
+        rc = sys.getrefcount(k)
+        d = self.dictClass()
+        d[k] = 1
+        assert sys.getrefcount(k) == rc + 1
+        d.clear() 
+        assert sys.getrefcount(k) == rc
+
+
 
 if __name__ == '__main__':
     unittest.main()

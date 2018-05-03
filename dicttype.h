@@ -94,6 +94,27 @@ dict_get(dictObject *self, PyObject *args) {
     return dictimpl_get(DICTIMPL(self), key, failobj);
 }
 
+static PyObject *
+dict_pop(dictObject *self, PyObject *args) {
+    PyObject *key;
+    PyObject *failobj = Py_None;
+
+    if (!PyArg_UnpackTuple(args, "pop", 1, 2, &key, &failobj))
+        return NULL;
+    
+    return dictimpl_pop(DICTIMPL(self), key, failobj);
+}
+
+static PyObject *
+dict_clear(dictObject *self) {
+    int ret = dictimpl_clear(DICTIMPL(self));
+    if (ret < 0) {
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
+
 static int 
 dict_ass_subscript(dictObject *self, PyObject *key, PyObject *val) {
     // printf("__setitem__: dictimpl=%p\n", DICTIMPL(self));
@@ -105,8 +126,11 @@ dict_ass_subscript(dictObject *self, PyObject *key, PyObject *val) {
 }
 
 static PyMethodDef dict_methods[] = {
+    {"__getitem__", (PyCFunction)dict_subscript, METH_O | METH_COEXIST, getitem__doc__},
     {"get",         (PyCFunction) dict_get,      METH_VARARGS, get__doc__},
+    {"clear",  (PyCFunction) dict_clear,   METH_NOARGS, clear__doc__},
     {"__sizeof__",  (PyCFunction) dict_sizeof,   METH_NOARGS, sizeof__doc__},
+    {"pop",         (PyCFunction)dict_pop,          METH_VARARGS, pop__doc__},
     {NULL}  /* Sentinel */
 };
 
